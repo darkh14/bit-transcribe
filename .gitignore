@@ -1,0 +1,10 @@
+/old
+/.venv
+/__pycache__
+/tasks
+/data
+/model_config
+/model_data
+/tmp
+/test_data
+*.log
