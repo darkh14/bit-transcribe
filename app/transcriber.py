@@ -100,7 +100,7 @@ class Transcriber:
         logger.warning(f"Attempted to get status for non-existent task: {task_id}")
         return None
 
-    async def process_file(self, task_id, file_path, diarize=False):
+    async def process_file(self, task_id, file_path, diarize=False, remove_timestamps=False):
         if not self.model:
             raise ValueError('Model is not set. Set model before process')
         start_time = time.time()
@@ -109,7 +109,7 @@ class Transcriber:
             await self.set_task_data(task_id, status='PROCESSING', progress=0)
             result_data = await self.model.process(task_id, file_path)
             self.model = None
-            await self._write_result_file(task_id, result_data, diarize=diarize)
+            await self._write_result_file(task_id, result_data, diarize=diarize, remove_timestamps=remove_timestamps)
             
             end_time = time.time()
             logger.info(f"Task {task_id} completed successfully in {end_time - start_time:.2f} seconds")
@@ -120,7 +120,7 @@ class Transcriber:
         finally:
             await self._cleanup_files(task_id)
 
-    async def _write_result_file(self, task_id, transcription_result, diarize):
+    async def _write_result_file(self, task_id, transcription_result, diarize, remove_timestamps):
         file_name = f"{task_id}_result.txt"
         file_path = os.path.join(RESULT_FOLDER, file_name)
     
@@ -139,7 +139,10 @@ class Transcriber:
                         continue
                     if speaker != current_speaker:
                         if current_speaker is not None:
-                            f.write(f"[{self._format_time(current_start)} - {self._format_time(end)}] {current_speaker}: {' '.join(current_text)}\n")
+                            if remove_timestamps:
+                                f.write(f"{current_speaker}: {' '.join(current_text)}\n")
+                            else:
+                                f.write(f"[{self._format_time(current_start)} - {self._format_time(end)}] {current_speaker}: {' '.join(current_text)}\n")
                         current_speaker = speaker
                         current_text = [text]
                         current_start = start
@@ -147,7 +150,10 @@ class Transcriber:
                         current_text.append(text)
             
                 if current_speaker is not None:
-                    f.write(f"[{self._format_time(current_start)} - {self._format_time(end)}] {current_speaker}: {' '.join(current_text)}\n")
+                    if remove_timestamps:
+                        f.write(f"{current_speaker}: {' '.join(current_text)}\n")
+                    else:
+                        f.write(f"[{self._format_time(current_start)} - {self._format_time(end)}] {current_speaker}: {' '.join(current_text)}\n")
         else: 
             # if isinstance(transcription_result[0], tuple):  # This means we have hypotheses
             #     transcriptions, boundaries, _ = transcription_result
@@ -162,7 +168,10 @@ class Transcriber:
             async with asyncio.Lock():
                 with open(file_path, 'w', encoding='utf-8') as f:
                     for transcription, boundary in zip(transcriptions, boundaries):
-                        f.write(f"[{self._format_time(boundary[0])} - {self._format_time(boundary[1])}]: {transcription}\n")
+                        if remove_timestamps:
+                            f.write(f"{transcription}\n")
+                        else:
+                            f.write(f"[{self._format_time(boundary[0])} - {self._format_time(boundary[1])}]: {transcription}\n")
             logger.info(f"Result file written for task {task_id}: {file_path}")
         
             logger.info(f"Result file with diarization written for task {task_id}: {file_path}")

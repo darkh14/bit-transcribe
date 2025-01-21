@@ -47,11 +47,12 @@ async def get_status() -> str:
 @app.post("/start_transcribing", response_model=TaskResponse)
 async def start_transcribing(file: UploadFile = File(),
                             diarize: bool = Query(False, description="Enable diarization"),
+                            remove_timestamps: bool = Query(False, description="Disable timestamps in result txt file"),
                             authenticated: bool = Depends(check_token)
                             ) -> TaskResponse:
                             
     start_time = time.time()
-    logger.info(f"Starting transcription for file: {file.filename}, diarization: {diarize}")
+    logger.info("Starting transcription for file: {}, diarization: {}, with timestamps {}".format(file.filename, diarize, str(not remove_timestamps)))
     
     task_id = transcriber.create_task()
     file_path = os.path.join(SOURCE_FOLDER, f"{task_id}_{file.filename}")
@@ -65,7 +66,7 @@ async def start_transcribing(file: UploadFile = File(),
         
         c_env = os.environ.copy()
 
-        args = [sys.executable, r'app/background_transcriber.py', task_id, file_path, str(diarize)]
+        args = [sys.executable, r'app/background_transcriber.py', task_id, file_path, str(diarize), str(remove_timestamps)]
         p = Popen(args, env=c_env)
         
         end_time = time.time()
